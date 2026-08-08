@@ -5,6 +5,8 @@ from machine import Pin
 
 import json
 
+__version__ = "1.0.4"
+
 # Загружаем настройки из JSON-файла
 try:
     with open("ring2bot.json", "r") as f:
@@ -26,6 +28,7 @@ buzzer = Pin(17, Pin.OUT)             # Зуммер на IO17
 # Включаем/выключаем пищалку при старте, чтобы она точно молчала
 buzzer.value(0)
 
+print("Звонок для калитки. Версия:", __version__)
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
