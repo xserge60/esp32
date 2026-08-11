@@ -5,7 +5,7 @@ from machine import Pin
 
 import json
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 # Загружаем настройки из JSON-файла
 try:
