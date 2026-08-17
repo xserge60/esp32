@@ -5,7 +5,7 @@ from machine import Pin
 
 import json
 
-__version__ = "1.0.5"
+__version__ = "1.0.21"
 
 # Загружаем настройки из JSON-файла
 try:
@@ -19,16 +19,22 @@ except OSError:
 WIFI_SSID = config.get("wifi_ssid", "")
 WIFI_PASS = config.get("wifi_pass", "")
 BOT_TOKEN = config.get("bot_token", "")
-CHAT_ID = config.get("chat_id", "")
+CHAT_ID   = config.get("chat_id", "")
+
+PIN_BUTTON0 = config.get("pin_button0", 33)  # Кнопка звонка со сбросом ESP32
+PIN_BUTTON1 = config.get("pin_button1", 26)  # Кнопка звонка на IO26
+PIN_BUZZER = config.get("pin_buzzer", 25)  # Зуммер на IO25
 
 # === ИНИЦИАЛИЗА ПИНОВ ===
-button = Pin(16, Pin.IN, Pin.PULL_UP)  # Кнопка звонка на IO16
-buzzer = Pin(17, Pin.OUT)             # Зуммер на IO17
+button0 = Pin(PIN_BUTTON0, Pin.IN, Pin.PULL_UP) # Кнопка звонка на IO33
+button1 = Pin(PIN_BUTTON1, Pin.IN, Pin.PULL_UP) # Кнопка звонка на IO26
+buzzer = Pin(PIN_BUZZER, Pin.OUT)             # Зуммер на IO25
 
 # Включаем/выключаем пищалку при старте, чтобы она точно молчала
 buzzer.value(0)
 
 print("Звонок для калитки. Версия:", __version__)
+print("Кнопка на пине", PIN_BUTTON0, "или на пине", PIN_BUTTON1, "зуммер на пине", PIN_BUZZER)
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
@@ -46,11 +52,11 @@ def sound_feedback():
     """Короткий двойной или один длинный сигнал об успешной доставке"""
     print("🔊 Подаем звуковой сигнал гостю...")
     buzzer.value(1)       # Включаем пищалку
-    time.sleep(0.15)      # Пищим 150 мс
-    buzzer.value(0)
-    time.sleep(0.1)
-    buzzer.value(1)       # Второй короткий "пик"
-    time.sleep(0.15)
+    time.sleep(0.5)      # Пищим 150 мс
+    # buzzer.value(0)
+    # time.sleep(0.1)
+    # buzzer.value(1)       # Второй короткий "пик"
+    # time.sleep(0.15)
     buzzer.value(0)       # Выключаем
 
 
@@ -81,7 +87,7 @@ connect_wifi()
 print("🔔 Звонок готов к работе!")
 
 while True:
-    if button.value() == 0:  # Замыкание кнопки
+    if button0.value() == 0 or button1.value() == 0:  # Замыкание кнопки
         print("🔔 Кнопка нажата! Отправляем уведомление...")
 
         # Пытаемся отправить сообщение

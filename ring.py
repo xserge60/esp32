@@ -7,7 +7,7 @@ from machine import Pin, wake_reason
 
 import json
 
-__version__ = "1.0.10"
+__version__ = "1.0.17"
 
 # Загружаем настройки из JSON-файла
 try:
@@ -17,7 +17,17 @@ except OSError:
     print("❌ Ошибка: файл ring2bot.json не найден!")
     config = {}
 
+# Достаем переменные
+WIFI_SSID = config.get("wifi_ssid", "")
+WIFI_PASS = config.get("wifi_pass", "")
+BOT_TOKEN = config.get("bot_token", "")
+CHAT_ID   = config.get("chat_id", "")
+
+PIN_BUTTON = config.get("pin_button", 33)  # Кнопка звонка со сбросом ESP32
+PIN_BUZZER = config.get("pin_buzzer", 25)  # Зуммер на IO25
+
 print("Звонок для калитки с низким энергопотреблением. Версия:", __version__)
+print("Кнопка на пине", PIN_BUTTON, "зуммер на пине", PIN_BUZZER)
 
 # === ЗАЩИТА ДЛЯ РАЗРАБОТКИ ===
 # Если плата проснулась от сброса (RESET / включение питания),
@@ -26,33 +36,33 @@ if machine.reset_cause() == machine.PWRON_RESET or machine.reset_cause() == mach
     print("⏳ Ожидание 5 сек для загрузки/отладки...")
     time.sleep(5)
 
-# Достаем переменные
-WIFI_SSID = config.get("wifi_ssid", "")
-WIFI_PASS = config.get("wifi_pass", "")
-BOT_TOKEN = config.get("bot_token", "")
-CHAT_ID = config.get("chat_id", "")
-
 # === ИНИЦИАЛИЗА ПИНОВ ===
-# Пин кнопки (GPIO33 - RTC пин) и пин зуммера (GPIO17)
-BUTTON_PIN = 33
-BUZZER_PIN = 17
+button = Pin(PIN_BUTTON, Pin.IN, Pin.PULL_UP) # Кнопка звонка на IO33
+buzzer = Pin(PIN_BUZZER, Pin.OUT)             # Зуммер на IO25
 
-buzzer = Pin(BUZZER_PIN, Pin.OUT)
+# Включаем/выключаем пищалку при старте, чтобы она точно молчала
 buzzer.value(0)
 
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+
     if not wlan.isconnected():
+        print("Подключение к Wi-Fi...", end="")
         wlan.connect(WIFI_SSID, WIFI_PASS)
         # Ждем подключения максимум 10 секунд (чтобы не сажать батарею при сбоях сети)
         timeout = 10
         while not wlan.isconnected() and timeout > 0:
             time.sleep(0.5)
             timeout -= 0.5
-    return wlan.isconnected()
+            print(".", end="")
 
+    if wlan.isconnected():
+        print("\n✅ Wi-Fi подключен! IP:", wlan.ifconfig()[0])
+        return True
+    print("\n❌ Wi-Fi не подключен!")
+    return False
 
 def send_telegram(text):
     encoded_text = text.replace(" ", "%20")
@@ -65,14 +75,11 @@ def send_telegram(text):
     except:
         return False
 
-
-def sound_feedback():
-    buzzer.value(1)
-    time.sleep(0.15)
-    buzzer.value(0)
-    time.sleep(0.1)
-    buzzer.value(1)
-    time.sleep(0.15)
+def sound_feedback(long=0.5):
+    """сигнал зуммера для подтверждения действия"""
+    print("🔊 Подаем звуковой сигнал гостю...")
+    buzzer.value(1)       # Включаем пищалку
+    time.sleep(long)      # Пищим 150 мс
     buzzer.value(0)
 
 
@@ -82,14 +89,16 @@ def sound_feedback():
 # machine.PIN_WAKE (код 2) означает, что проснулись от нажатия кнопки
 if wake_reason() == machine.PIN_WAKE or wake_reason() == 2:
     print("🔔 Кнопка нажата! Проснулись из Deep Sleep...")
+    # подтвеждаем гостю, что кнопка нажата хорошо
+    sound_feedback(0.15)
 
     if connect_wifi():
         if send_telegram("Звонят в калитку!"):
-            sound_feedback()
+            sound_feedback(0.5)
 
 # === НАСТРОЙКА УСЛОВИЯ СЛЕДУЮЩЕГО ПРОБУЖДЕНИЯ И УХОД В СОН ===
 
-btn_pin = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)
+btn_pin = Pin(PIN_BUTTON, Pin.IN, Pin.PULL_UP)
 
 esp32.wake_on_ext0(pin=btn_pin, level=esp32.WAKEUP_ALL_LOW)
 
