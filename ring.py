@@ -3,11 +3,11 @@ import network
 import urequests
 import esp32
 import machine
-from machine import Pin, wake_reason
+from machine import Pin, wake_reason, WDT
 
 import json
 
-__version__ = "1.0.17"
+__version__ = "1.0.22"
 
 # Загружаем настройки из JSON-файла
 try:
@@ -60,20 +60,31 @@ def connect_wifi():
 
     if wlan.isconnected():
         print("\n✅ Wi-Fi подключен! IP:", wlan.ifconfig()[0])
+        time.sleep(0.3)  # даём DNS/стеку время устаканиться после подключения
         return True
+
     print("\n❌ Wi-Fi не подключен!")
     return False
 
-def send_telegram(text):
+def send_telegram(text, retries=2):
     encoded_text = text.replace(" ", "%20")
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage?chat_id={CHAT_ID}&text={encoded_text}"
-    try:
-        response = urequests.get(url)
-        success = response.status_code == 200
-        response.close()
-        return success
-    except:
-        return False
+
+    for attempt in range(1, retries + 1):
+        try:
+            response = urequests.get(url)
+            success = response.status_code == 200
+            response.close()
+            if success:
+                return True
+            print(f"⚠️ Telegram вернул код {response.status_code} (попытка {attempt})")
+        except Exception as e:
+            print(f"⚠️ Ошибка запроса к Telegram (попытка {attempt}):", e)
+
+        if attempt < retries:
+            time.sleep(1)  # небольшая пауза перед повтором
+
+    return False
 
 def sound_feedback(long=0.5):
     """сигнал зуммера для подтверждения действия"""
@@ -91,6 +102,9 @@ if wake_reason() == machine.PIN_WAKE or wake_reason() == 2:
     print("🔔 Кнопка нажата! Проснулись из Deep Sleep...")
     # подтвеждаем гостю, что кнопка нажата хорошо
     sound_feedback(0.15)
+
+    # Watchdog: если весь процесс (Wi-Fi + отправка) не уложится в 25 сек — жёсткий сброс
+    wdt = WDT(timeout=25000)
 
     if connect_wifi():
         if send_telegram("Звонят в калитку!"):
