@@ -16,6 +16,7 @@
 *.json
 __init__.py
 
+temp_sync_log.txt
 *.log*
 *.users
 *.err
